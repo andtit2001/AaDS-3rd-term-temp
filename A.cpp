@@ -1,5 +1,7 @@
 #include <functional>
+#include <iostream>
 #include <iterator>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -42,4 +44,12 @@ std::vector<size_t> KnuthMorrisPratt(std::string_view pattern,
     }
   }
   return occurrences;
+}
+
+int main() {
+  std::string pattern, text;
+  std::getline(std::cin, pattern);
+  std::getline(std::cin, text);
+  for (auto num : KnuthMorrisPratt(pattern, text))
+    std::cout << num + 1 - pattern.size() << ' ';
 }
