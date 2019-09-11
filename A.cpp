@@ -1,5 +1,6 @@
 #include <functional>
 #include <iterator>
+#include <string_view>
 #include <vector>
 
 template <class RAIter, class Equiv = std::equal_to<
@@ -19,4 +20,26 @@ std::vector<size_t> PrefixFunction(RAIter begin, RAIter end,
     }
   }
   return prefix_func;
+}
+
+std::vector<size_t> KnuthMorrisPratt(std::string_view pattern,
+                                     std::string_view text) {
+  auto prefix_function = PrefixFunction(pattern.cbegin(), pattern.cend());
+  size_t accumulated_length = 0;
+  std::vector<size_t> occurrences;
+  for (size_t i = 0; i < text.size(); ++i) {
+    while (true) {
+      if (text[i] == pattern[accumulated_length]) {
+        ++accumulated_length;
+        break;
+      }
+      if (accumulated_length == 0) break;
+      accumulated_length = prefix_function[accumulated_length - 1];
+    }
+    if (accumulated_length == pattern.size()) {
+      occurrences.push_back(i);
+      accumulated_length = prefix_function[accumulated_length - 1];
+    }
+  }
+  return occurrences;
 }
