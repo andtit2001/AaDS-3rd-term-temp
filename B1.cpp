@@ -1,4 +1,5 @@
 #include <bitset>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -13,6 +14,15 @@ class PrefixFuncToStringConverter {
   std::basic_string_view<CharT> GetString() const noexcept;
   void AppendPrefixFuncValue(size_t val);
 };
+
+////////////////////////////////////////////////////////////////////////////////
+
+int main() {
+  PrefixFuncToStringConverter generator;
+  size_t value;
+  while (std::cin >> value) generator.AppendPrefixFuncValue(value);
+  std::cout << generator.GetString() << std::endl;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 
