@@ -1,4 +1,5 @@
 #include <bitset>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -43,4 +44,13 @@ std::string ConvertZFuncToString(const std::vector<size_t>& z_func) {
     }
   }
   return generated_string;
+}
+
+int main() {
+  size_t value;
+  std::vector<size_t> z_func;
+  while (std::cin >> value)
+    z_func.push_back(value);
+  z_func[0] = 0;
+  std::cout << ConvertZFuncToString(z_func) << std::endl;
 }
