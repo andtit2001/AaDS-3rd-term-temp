@@ -3,24 +3,38 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
+
+template <class StringRAIter, class FuncRAIter,
+          class CharT = typename std::iterator_traits<StringRAIter>::value_type,
+          class Equiv = std::equal_to<CharT>>
+size_t GetNextPrefixFunctionValue(StringRAIter str_begin, FuncRAIter func_begin,
+                                  size_t current_value, CharT ch,
+                                  Equiv eq = Equiv()) {
+  static_assert(
+      std::is_same_v<typename std::iterator_traits<FuncRAIter>::value_type,
+                     size_t>);
+
+  while (true) {
+    if (eq(ch, *std::next(str_begin, current_value))) return current_value + 1;
+    if (current_value == 0) break;
+    current_value = *std::next(func_begin, current_value - 1);
+  }
+  return 0;
+}
 
 template <class RAIter, class Equiv = std::equal_to<
                             typename std::iterator_traits<RAIter>::value_type>>
 std::vector<size_t> PrefixFunction(RAIter begin, RAIter end,
                                    Equiv eq = Equiv()) {
-  std::vector<size_t> prefix_func(std::distance(begin, end));
-  size_t current_value = 0;
-  for (RAIter it = std::next(begin); it != end; ++it) {
-    while (true) {
-      if (eq(*it, *std::next(begin, current_value))) {
-        prefix_func[std::distance(begin, it)] = ++current_value;
-        break;
-      }
-      if (current_value == 0) break;
-      current_value = prefix_func[current_value - 1];
-    }
-  }
+  std::vector<size_t> prefix_func;
+  if (begin == end) return prefix_func;
+  prefix_func.reserve(std::distance(begin, end));
+  prefix_func.push_back(0);
+  for (RAIter it = std::next(begin); it != end; ++it)
+    prefix_func.push_back(GetNextPrefixFunctionValue(
+        begin, prefix_func.cbegin(), prefix_func.back(), *it, eq));
   return prefix_func;
 }
 
@@ -30,18 +44,10 @@ std::vector<size_t> KnuthMorrisPratt(std::string_view pattern,
   size_t accumulated_length = 0;
   std::vector<size_t> occurrences;
   for (size_t i = 0; i < text.size(); ++i) {
-    while (true) {
-      if (text[i] == pattern[accumulated_length]) {
-        ++accumulated_length;
-        break;
-      }
-      if (accumulated_length == 0) break;
-      accumulated_length = prefix_function[accumulated_length - 1];
-    }
-    if (accumulated_length == pattern.size()) {
-      occurrences.push_back(i);
-      accumulated_length = prefix_function[accumulated_length - 1];
-    }
+    accumulated_length =
+        GetNextPrefixFunctionValue(pattern.cbegin(), prefix_function.cbegin(),
+                                   accumulated_length, text[i]);
+    if (accumulated_length == pattern.size()) occurrences.push_back(i);
   }
   return occurrences;
 }
