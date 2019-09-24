@@ -38,24 +38,31 @@ std::vector<size_t> PrefixFunction(RAIter begin, RAIter end,
   return prefix_func;
 }
 
-std::vector<size_t> KnuthMorrisPratt(std::string_view pattern,
-                                     std::string_view text) {
-  auto prefix_function = PrefixFunction(pattern.cbegin(), pattern.cend());
-  size_t accumulated_length = 0;
-  std::vector<size_t> occurrences;
-  for (size_t i = 0; i < text.size(); ++i) {
+template <class RAIter, class InputIter, class OutputIter>
+void KnuthMorrisPratt(RAIter pattern_begin, RAIter pattern_end,
+                      InputIter text_begin, InputIter text_end,
+                      OutputIter out) {
+  auto prefix_function = PrefixFunction(pattern_begin, pattern_end);
+  size_t accumulated_length = 0, position = 0;
+  for (; text_begin != text_end; ++text_begin, ++position) {
     accumulated_length =
-        GetNextPrefixFunctionValue(pattern.cbegin(), prefix_function.cbegin(),
-                                   accumulated_length, text[i]);
-    if (accumulated_length == pattern.size()) occurrences.push_back(i);
+        GetNextPrefixFunctionValue(pattern_begin, prefix_function.cbegin(),
+                                   accumulated_length, *text_begin);
+    if (accumulated_length == prefix_function.size()) {
+      *out = position + 1 - prefix_function.size();
+      ++out;
+    }
   }
-  return occurrences;
 }
 
 int main() {
-  std::string pattern, text;
+  std::ios_base::sync_with_stdio(false);
+  std::cin.tie(nullptr);
+
+  std::string pattern;
   std::getline(std::cin, pattern);
-  std::getline(std::cin, text);
-  for (auto num : KnuthMorrisPratt(pattern, text))
-    std::cout << num + 1 - pattern.size() << ' ';
+  KnuthMorrisPratt(pattern.cbegin(), pattern.cend(),
+                   std::istream_iterator<char>(std::cin),
+                   std::istream_iterator<char>(),
+                   std::ostream_iterator<size_t>(std::cout, " "));
 }
