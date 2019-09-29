@@ -17,7 +17,8 @@ size_t GetNextPrefixFunctionValue(StringRAIter str_begin, FuncRAIter func_begin,
                      size_t>);
 
   while (true) {
-    if (eq(ch, *std::next(str_begin, current_value))) return current_value + 1;
+    if (eq(ch, *std::next(str_begin, current_value)))
+      return current_value + 1;
     if (current_value == 0) break;
     current_value = *std::next(func_begin, current_value - 1);
   }
