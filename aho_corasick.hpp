@@ -1,6 +1,9 @@
 #include <algorithm>
 #include <map>
 #include <string>
+#include <queue>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 template <class _NodeID, class _CharT, class _SizeType, class _IterableWrapper>
@@ -81,6 +84,36 @@ class MapVectorTrie : public ITrie<_SizeType, _CharT, _SizeType,
   virtual NodeID GetParent(NodeID) const noexcept override;
   virtual CharT GetIncomingChar(NodeID) const noexcept override;
   virtual IterableWrapper GetOutcomingEdges(NodeID) const override;
+};
+
+template <class _Trie, class _LinkContainer>
+class AhoCorasickAutomaton {
+ public:
+  using Trie = _Trie;
+  using LinkContainer = _LinkContainer;
+
+  using NodeID = typename _Trie::NodeID;
+  using CharT = typename _Trie::CharT;
+  using SizeType = typename _Trie::SizeType;
+  using IterableWrapper = typename _Trie::IterableWrapper;
+
+ protected:
+  Trie dictionary_;
+  LinkContainer suffix_link_, terminal_link_;
+
+ public:
+  AhoCorasickAutomaton() = default;
+  template <class ContainerGen>
+  AhoCorasickAutomaton(Trie, ContainerGen);
+
+  const Trie& Dictionary() const noexcept;
+
+  template <class InputIter, class Action>
+  void ProcessText(InputIter, InputIter, Action) const;
+
+ protected:
+  NodeID GetNext(NodeID, CharT) const noexcept;
+  void ComputeLinks();
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -223,4 +256,107 @@ template <class _CharT, class _SizeType>
 typename MapVectorTrie<_CharT, _SizeType>::IterableWrapper
 MapVectorTrie<_CharT, _SizeType>::GetOutcomingEdges(NodeID node) const {
   return nodes_[node].transitions;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <class _Trie, class _LinkContainer>
+template <class ContainerGen>
+AhoCorasickAutomaton<_Trie, _LinkContainer>::AhoCorasickAutomaton(
+    Trie dictionary, ContainerGen generate)
+    : dictionary_(std::move(dictionary)),
+      suffix_link_(generate(dictionary_)),
+      terminal_link_(generate(dictionary_)) {
+  ComputeLinks();
+}
+
+template <class _Trie, class _LinkContainer>
+const typename AhoCorasickAutomaton<_Trie, _LinkContainer>::Trie&
+AhoCorasickAutomaton<_Trie, _LinkContainer>::Dictionary() const noexcept {
+  return dictionary_;
+}
+
+template <class _Trie, class _LinkContainer>
+typename AhoCorasickAutomaton<_Trie, _LinkContainer>::NodeID
+AhoCorasickAutomaton<_Trie, _LinkContainer>::GetNext(NodeID node,
+                                                     CharT ch) const noexcept {
+  NodeID root = dictionary_.Root();
+  while (true) {
+    NodeID next_node = dictionary_.GetNext(node, ch);
+    if (next_node != node) return next_node;
+    if (node == root) break;
+    node = suffix_link_[node];
+  }
+  return root;
+}
+
+template <class _Trie, class _LinkContainer>
+void AhoCorasickAutomaton<_Trie, _LinkContainer>::ComputeLinks() {
+  NodeID root = dictionary_.Root();
+  suffix_link_[root] = root;
+  terminal_link_[root] = root;
+
+  std::queue<NodeID> bfs_queue;
+  // Process children of trie root separately
+  {
+    IterableWrapper wrapper = dictionary_.GetOutcomingEdges(root);
+    typename std::remove_reference_t<IterableWrapper>::const_iterator
+        begin = wrapper.begin(),
+        end = wrapper.end();
+    for (; begin != end; ++begin) {
+      const std::pair<CharT, NodeID>& pair = *begin;
+      NodeID node = pair.second;
+      bfs_queue.push(node);
+      suffix_link_[node] = root;
+      if (dictionary_.GetDictionaryEntries(root).empty())
+        terminal_link_[node] = node;
+      else
+        terminal_link_[node] = root;
+    }
+  }
+
+  while (!bfs_queue.empty()) {
+    NodeID node = bfs_queue.front();
+    bfs_queue.pop();
+
+    IterableWrapper wrapper = dictionary_.GetOutcomingEdges(node);
+    typename std::remove_reference_t<IterableWrapper>::const_iterator
+        begin = wrapper.begin(),
+        end = wrapper.end();
+    for (; begin != end; ++begin) {
+      const std::pair<CharT, NodeID>& pair = *begin;
+      auto [ch, next_node] = pair;
+      bfs_queue.push(next_node);
+
+      NodeID suffix_node = GetNext(suffix_link_[node], ch);
+      suffix_link_[next_node] = suffix_node;
+      if (dictionary_.GetDictionaryEntries(suffix_node).empty()) {
+        // If proper suffixes of `suffix_node`
+        // do not correspond to any pattern...
+        if (suffix_node == terminal_link_[suffix_node])
+          terminal_link_[next_node] = next_node;
+        else
+          terminal_link_[next_node] = terminal_link_[suffix_node];
+      } else
+        terminal_link_[next_node] = suffix_node;
+    }
+  }
+}
+
+template <class _Trie, class _LinkContainer>
+template <class InputIter, class Action>
+void AhoCorasickAutomaton<_Trie, _LinkContainer>::ProcessText(
+    InputIter begin, InputIter end, Action action) const {
+  NodeID current = dictionary_.Root();
+  size_t pos = 0;
+  for (; begin != end; ++begin, ++pos) {
+    current = GetNext(current, *begin);
+    NodeID next = current;
+    while (true) {
+      for (auto index : dictionary_.GetDictionaryEntries(next))
+        action(pos, index);
+      if (terminal_link_[next] == next) break;
+      next = terminal_link_[next];
+    }
+  }
 }
