@@ -116,6 +116,11 @@ class AhoCorasickAutomaton {
   void ComputeLinks();
 };
 
+template <class Trie>
+std::vector<typename Trie::NodeID> GenerateVector(const Trie& trie) {
+  return std::vector<typename Trie::NodeID>(trie.TreeSize());
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 template <class _NodeID, class _CharT, class _SizeType, class _IterableWrapper>
