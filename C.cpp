@@ -121,6 +121,26 @@ std::vector<typename Trie::NodeID> GenerateVector(const Trie& trie) {
   return std::vector<typename Trie::NodeID>(trie.TreeSize());
 }
 
+template <class CharT, class SizeType>
+class WildcardSearchAdaptor {
+ protected:
+  SizeType pattern_size_;
+  std::vector<SizeType> subpattern_ends_;
+  AhoCorasickAutomaton<MapVectorTrie<CharT, SizeType>, std::vector<SizeType>>
+      automaton_;
+  std::vector<SizeType> subpattern_counters_;
+
+ public:
+  template <class InputIter>
+  WildcardSearchAdaptor(InputIter, InputIter, CharT);
+  template <class InputIter>
+  void ProcessText(InputIter, InputIter);
+  template <class OutputIter>
+  void GetOccurrences(OutputIter) const;
+
+  void operator()(SizeType position, SizeType pattern_index);
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 
 template <class _NodeID, class _CharT, class _SizeType, class _IterableWrapper>
@@ -363,5 +383,75 @@ void AhoCorasickAutomaton<_Trie, _LinkContainer>::ProcessText(
       if (terminal_link_[next] == next) break;
       next = terminal_link_[next];
     }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+template <class CharT, class SizeType>
+template <class InputIter>
+WildcardSearchAdaptor<CharT, SizeType>::WildcardSearchAdaptor(InputIter begin,
+                                                              InputIter end,
+                                                              CharT wildcard)
+    : pattern_size_(0) {
+  MapVectorTrie<CharT, SizeType> trie;
+  std::basic_string<CharT> subpattern;
+
+  bool accumulate_mode = false;
+  SizeType& pos = pattern_size_;
+  for (; begin != end; ++begin, ++pos) {
+    CharT ch = *begin;
+    if (ch == wildcard) {
+      if (accumulate_mode) {
+        trie.Insert(subpattern.cbegin(), subpattern.cend());
+        subpattern_ends_.push_back(pos);
+        subpattern.clear();
+        accumulate_mode = false;
+      }
+    } else {
+      accumulate_mode = true;
+      subpattern.push_back(ch);
+    }
+  }
+  trie.Insert(subpattern.cbegin(), subpattern.cend());
+  subpattern_ends_.push_back(pos);
+
+  automaton_ = AhoCorasickAutomaton<MapVectorTrie<CharT, SizeType>,
+                                    std::vector<SizeType>>(
+      std::move(trie), GenerateVector<MapVectorTrie<CharT, SizeType>>);
+}
+
+template <class CharT, class SizeType>
+template <class InputIter>
+void WildcardSearchAdaptor<CharT, SizeType>::ProcessText(InputIter begin,
+                                                         InputIter end) {
+  subpattern_counters_.clear();
+  automaton_
+      .template ProcessText<InputIter, WildcardSearchAdaptor<CharT, SizeType>&>(
+          begin, end, *this);
+}
+
+template <class CharT, class SizeType>
+template <class OutputIter>
+void WildcardSearchAdaptor<CharT, SizeType>::GetOccurrences(
+    OutputIter out) const {
+  SizeType pos = 0;
+  for (const SizeType& num : subpattern_counters_) {
+    if (num == subpattern_ends_.size()) {
+      *out = pos;
+      ++out;
+    }
+    ++pos;
+  }
+}
+
+template <class CharT, class SizeType>
+void WildcardSearchAdaptor<CharT, SizeType>::operator()(
+    SizeType position, SizeType pattern_index) {
+  if (position + 1 >= subpattern_ends_[pattern_index]) {
+    SizeType idx = position + 1 - subpattern_ends_[pattern_index];
+    if (idx >= subpattern_counters_.size())
+      subpattern_counters_.resize(idx + 1);
+    ++subpattern_counters_[idx];
   }
 }
