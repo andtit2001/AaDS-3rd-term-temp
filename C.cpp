@@ -1,4 +1,7 @@
+#include <cstdint>
 #include <algorithm>
+#include <iostream>
+#include <iterator>
 #include <map>
 #include <string>
 #include <queue>
@@ -140,6 +143,21 @@ class WildcardSearchAdaptor {
 
   void operator()(SizeType position, SizeType pattern_index);
 };
+
+////////////////////////////////////////////////////////////////////////////////
+
+int main() {
+  std::ios_base::sync_with_stdio(false);
+
+  std::string pattern;
+  std::cin >> pattern;  // Should be replaced with analog of
+                        // std::istream_iterator which supports sentinels
+  WildcardSearchAdaptor<char, uint32_t> searcher(pattern.cbegin(),
+                                                 pattern.cend(), '?');
+  searcher.ProcessText(std::istream_iterator<char>(std::cin),
+                       std::istream_iterator<char>());
+  searcher.GetOccurrences(std::ostream_iterator<uint32_t>(std::cout, " "));
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 
