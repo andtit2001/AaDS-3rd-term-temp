@@ -1,5 +1,7 @@
 #include <cstdint>
 #include <algorithm>
+#include <deque>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -127,21 +129,22 @@ std::vector<typename Trie::NodeID> GenerateVector(const Trie& trie) {
 template <class CharT, class SizeType>
 class WildcardSearchAdaptor {
  protected:
-  SizeType pattern_size_;
+  SizeType pattern_size_, last_position_;
   std::vector<SizeType> subpattern_ends_;
   AhoCorasickAutomaton<MapVectorTrie<CharT, SizeType>, std::vector<SizeType>>
       automaton_;
-  std::vector<SizeType> subpattern_counters_;
+  std::deque<SizeType> subpattern_counters_;
 
  public:
   template <class InputIter>
   WildcardSearchAdaptor(InputIter, InputIter, CharT);
-  template <class InputIter>
-  void ProcessText(InputIter, InputIter);
-  template <class OutputIter>
-  void GetOccurrences(OutputIter) const;
+  template <class InputIter, class OutputIter>
+  void ProcessText(InputIter, InputIter, OutputIter);
 
-  void operator()(SizeType position, SizeType pattern_index);
+ protected:
+  template <class OutputIter>
+  void ProcessOccurrence(SizeType position, SizeType pattern_index,
+                         OutputIter out);
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -155,8 +158,8 @@ int main() {
   WildcardSearchAdaptor<char, uint32_t> searcher(pattern.cbegin(),
                                                  pattern.cend(), '?');
   searcher.ProcessText(std::istream_iterator<char>(std::cin),
-                       std::istream_iterator<char>());
-  searcher.GetOccurrences(std::ostream_iterator<uint32_t>(std::cout, " "));
+                       std::istream_iterator<char>(),
+                       std::ostream_iterator<uint32_t>(std::cout, " "));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -411,7 +414,7 @@ template <class InputIter>
 WildcardSearchAdaptor<CharT, SizeType>::WildcardSearchAdaptor(InputIter begin,
                                                               InputIter end,
                                                               CharT wildcard)
-    : pattern_size_(0) {
+    : pattern_size_(0), last_position_(0) {
   MapVectorTrie<CharT, SizeType> trie;
   std::basic_string<CharT> subpattern;
 
@@ -440,36 +443,38 @@ WildcardSearchAdaptor<CharT, SizeType>::WildcardSearchAdaptor(InputIter begin,
 }
 
 template <class CharT, class SizeType>
-template <class InputIter>
+template <class InputIter, class OutputIter>
 void WildcardSearchAdaptor<CharT, SizeType>::ProcessText(InputIter begin,
-                                                         InputIter end) {
+                                                         InputIter end,
+                                                         OutputIter out) {
+  last_position_ = 0;
   subpattern_counters_.clear();
-  automaton_
-      .template ProcessText<InputIter, WildcardSearchAdaptor<CharT, SizeType>&>(
-          begin, end, *this);
+  subpattern_counters_.emplace_back();
+
+  using namespace std::placeholders;
+  automaton_.ProcessText(
+      begin, end,
+      std::bind(&WildcardSearchAdaptor<CharT,
+                                       SizeType>::ProcessOccurrence<OutputIter>,
+                this, _1, _2, std::ref(out)));
 }
 
 template <class CharT, class SizeType>
 template <class OutputIter>
-void WildcardSearchAdaptor<CharT, SizeType>::GetOccurrences(
-    OutputIter out) const {
-  SizeType pos = 0;
-  for (const SizeType& num : subpattern_counters_) {
-    if (num == subpattern_ends_.size()) {
-      *out = pos;
+void WildcardSearchAdaptor<CharT, SizeType>::ProcessOccurrence(
+    SizeType position, SizeType pattern_index, OutputIter out) {
+  if (position + 1 >= subpattern_ends_[pattern_index]) {
+    for (; last_position_ < position; ++last_position_) {
+      if (subpattern_counters_.size() == pattern_size_)
+        subpattern_counters_.pop_front();
+      subpattern_counters_.emplace_back();
+    }
+    SizeType idx =
+        subpattern_counters_.size() - subpattern_ends_[pattern_index];
+    ++subpattern_counters_[idx];
+    if (idx == 0 && subpattern_counters_.front() == subpattern_ends_.size()) {
+      *out = position + 1 - pattern_size_;
       ++out;
     }
-    ++pos;
-  }
-}
-
-template <class CharT, class SizeType>
-void WildcardSearchAdaptor<CharT, SizeType>::operator()(
-    SizeType position, SizeType pattern_index) {
-  if (position + 1 >= subpattern_ends_[pattern_index]) {
-    SizeType idx = position + 1 - subpattern_ends_[pattern_index];
-    if (idx >= subpattern_counters_.size())
-      subpattern_counters_.resize(idx + 1);
-    ++subpattern_counters_[idx];
   }
 }
